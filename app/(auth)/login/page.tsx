@@ -1,0 +1,31 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import { LoginForm } from "./login-form";
+
+export const metadata: Metadata = { title: "Sign in — Signoff" };
+
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams: { next?: string };
+}) {
+  return (
+    <div className="w-full max-w-[400px]">
+      <h1 className="text-3xl">Welcome back</h1>
+      <p className="mt-2 text-[15px] leading-relaxed text-muted">
+        Sign in to see what your clients have said.
+      </p>
+
+      <div className="card mt-7 p-6">
+        <LoginForm next={searchParams.next} />
+      </div>
+
+      <p className="mt-6 text-center text-sm text-muted">
+        New here?{" "}
+        <Link href="/signup" className="text-ink underline underline-offset-4">
+          Create an account
+        </Link>
+      </p>
+    </div>
+  );
+}

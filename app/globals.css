@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Signoff design tokens.
+ * Exposed as CSS variables as well as Tailwind theme keys so that pasted
+ * components can reference either without drifting from the palette.
+ */
+:root {
+  --canvas: #faf9f6;
+  --ink: #2c2c2a;
+  --muted: #888780;
+  --faint: #b4b2a9;
+  --line: #e8e6de;
+
+  --coral: #c8522a;
+  --violet: #534ab7;
+
+  --approved-bg: #eaf3de;
+  --approved-fg: #27500a;
+  --pending-bg: #faeeda;
+  --pending-fg: #633806;
+  --changes-bg: #faece7;
+  --changes-fg: #712b13;
+  --waiting-bg: #f1efe8;
+  --waiting-fg: #5f5e5a;
+
+  /* Per-client brand color; overridden inline on branded surfaces. */
+  --accent: var(--coral);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-dm-serif), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  /* Standard card surface: hairline border, warm white, generous radius. */
+  .card {
+    @apply rounded-card border-hairline border-line bg-white shadow-card;
+  }
+}
+
+/*
+ * Controls are always visible — never revealed by hover.
+ * Hover only deepens what is already on screen. A phone has no hover state.
+ */
+@media (hover: hover) {
+  .hover-emphasis:hover {
+    background-color: #f4f2ec;
+  }
+}

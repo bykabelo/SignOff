@@ -16,9 +16,14 @@ create table if not exists clients (
 );
 
 -- ── Posts / Deliverables (same table, kind distinguishes) ─
+-- Child rows cascade. Deleting a deliverable has to take its versions,
+-- comments and assets with it, and RLS gives the creator no delete policy on
+-- those child tables — a cascade runs as a system action, so it works where
+-- a manual child delete would silently affect zero rows and leave the
+-- foreign key blocking the parent.
 create table if not exists posts (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid references clients not null,
+  client_id uuid references clients on delete cascade not null,
   kind text default 'post',              -- 'post' (social) | 'deliverable' | 'asset_request' (design)
   title text,                            -- deliverable name (design mode)
   image_url text,                        -- social post image (design uses post_versions)
@@ -26,13 +31,22 @@ create table if not exists posts (
   status text default 'pending',         -- pending | approved | changes | in_progress | ready_for_review | waiting_on_assets
   scheduled_for text,
   locked boolean default false,          -- deliverable waiting on a dependency
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  -- When the status last moved. The dashboard activity feed reports "Maya
+  -- approved Post 3" alongside comments, and without this an approval has
+  -- no time of its own — only the post's creation time, which is wrong.
+  status_changed_at timestamptz default now()
 );
+
+-- Backfill for a database created before this column existed.
+alter table posts add column if not exists status_changed_at timestamptz default now();
+
+create index if not exists posts_status_changed_idx on posts (status_changed_at desc);
 
 -- ── Versions (design mode) ───────────────────────────────
 create table if not exists post_versions (
   id uuid primary key default gen_random_uuid(),
-  post_id uuid references posts not null,
+  post_id uuid references posts on delete cascade not null,
   version_number int not null,
   image_url text,
   note text,
@@ -43,8 +57,8 @@ create table if not exists post_versions (
 -- ── Comments (version_id nullable; social comments have none) ─
 create table if not exists comments (
   id uuid primary key default gen_random_uuid(),
-  post_id uuid references posts not null,
-  version_id uuid references post_versions,
+  post_id uuid references posts on delete cascade not null,
+  version_id uuid references post_versions on delete cascade,
   author text default 'Client',
   body text not null,
   created_at timestamptz default now()
@@ -53,7 +67,7 @@ create table if not exists comments (
 -- ── Client-uploaded assets (design mode, two-way) ────────
 create table if not exists client_assets (
   id uuid primary key default gen_random_uuid(),
-  post_id uuid references posts not null,   -- the asset_request this fulfills
+  post_id uuid references posts on delete cascade not null,  -- the asset_request this fulfils
   file_url text not null,
   file_name text,
   uploaded_at timestamptz default now()

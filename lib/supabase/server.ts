@@ -44,3 +44,20 @@ export async function getUser() {
   } = await supabase.auth.getUser();
   return user;
 }
+
+/**
+ * The signed-in user, or throw. For creator-only API routes, which the
+ * middleware already guards — this is the second lock on the same door.
+ */
+export async function requireUser() {
+  const user = await getUser();
+  if (!user) throw new UnauthorisedError();
+  return user;
+}
+
+export class UnauthorisedError extends Error {
+  constructor() {
+    super("Not signed in");
+    this.name = "UnauthorisedError";
+  }
+}

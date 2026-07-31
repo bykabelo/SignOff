@@ -45,6 +45,7 @@ export type Post = {
   scheduled_for: string | null;
   locked: boolean;
   created_at: string;
+  status_changed_at: string;
 };
 
 export type PostVersion = {

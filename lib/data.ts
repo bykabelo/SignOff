@@ -20,6 +20,12 @@ export type ClientSummary = Client & {
   approved: number;
   awaiting: number;
   needsChanges: number;
+  /**
+   * The client's reviewable items, for the dashboard's quick-look sheet.
+   * These are already in memory from the counts query, so carrying them
+   * costs nothing beyond payload — no extra round trip.
+   */
+  posts: Post[];
 };
 
 export type ActivityItem = {
@@ -112,6 +118,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         (p) => p.status === "pending" || p.status === "ready_for_review",
       ).length,
       needsChanges: reviewable.filter((p) => p.status === "changes").length,
+      posts: reviewable,
     };
   });
 

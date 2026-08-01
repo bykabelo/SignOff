@@ -88,6 +88,32 @@ export async function signInAction(
   redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
 }
 
+/**
+ * Store what onboarding asks about the user's work.
+ *
+ * This lives in the auth user's metadata rather than a profiles table: none
+ * of it is queried, joined or filtered on — it is context for the operator,
+ * and a whole table plus RLS policy to hold three never-read fields would be
+ * weight without a purpose.
+ */
+export async function saveWorkDetails(input: {
+  agencyName?: string;
+  clientCount?: string;
+  contentTypes?: string[];
+}): Promise<ActionResult> {
+  const supabase = createClient();
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      agency_name: input.agencyName?.trim() || null,
+      client_count: input.clientCount ?? null,
+      content_types: input.contentTypes ?? [],
+    },
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();

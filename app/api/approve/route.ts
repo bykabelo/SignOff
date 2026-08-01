@@ -17,8 +17,13 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null);
     if (!body) return jsonError("Malformed request.");
 
-    const status: PostStatus =
-      body.status === "changes" ? "changes" : "approved";
+    // "pending" is the Undo on the review page: a client who taps approve by
+    // mistake needs a way back, and without it the undo button would only
+    // reset local state while the server kept the wrong answer.
+    const allowed: PostStatus[] = ["approved", "changes", "pending"];
+    const status: PostStatus = allowed.includes(body.status)
+      ? body.status
+      : "approved";
 
     const access = await authorisePostAccess(body.token, body.postId);
     if (!access) return notFound();
@@ -33,9 +38,13 @@ export async function POST(request: Request) {
 
     if (error) return serverError("approve failed", error);
 
-    const label = post.title || post.caption?.slice(0, 60) || "an item";
-    // Not awaited: a slow mail provider must not hold up the client's tap.
-    void notifyApproval(access.client, label, status === "approved");
+    // An undo is a correction, not news — mailing the creator about it would
+    // be noise on top of the notification they already received.
+    if (status !== "pending") {
+      const label = post.title || post.caption?.slice(0, 60) || "an item";
+      // Not awaited: a slow mail provider must not hold up the client's tap.
+      void notifyApproval(access.client, label, status === "approved");
+    }
 
     return jsonOk({ status });
   } catch (error) {

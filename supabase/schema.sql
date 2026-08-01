@@ -73,6 +73,18 @@ create table if not exists client_assets (
   uploaded_at timestamptz default now()
 );
 
+-- ── Billing ──────────────────────────────────────────────
+-- One row per user, holding the plan and the Stripe identifiers needed to
+-- reconcile a webhook back to an account.
+create table if not exists profiles (
+  user_id uuid primary key references auth.users on delete cascade,
+  plan text not null default 'free',       -- free | solo | studio
+  stripe_customer_id text unique,
+  stripe_subscription_id text unique,
+  current_period_end timestamptz,
+  updated_at timestamptz default now()
+);
+
 -- ── Indexes ──────────────────────────────────────────────
 -- The review page loads a whole client workspace in one shot; these keep
 -- that a handful of index scans rather than sequential scans.
@@ -159,6 +171,39 @@ create policy "agency reads assets" on client_assets for select
     select 1 from posts join clients on clients.id = posts.client_id
     where posts.id = client_assets.post_id and clients.user_id = auth.uid()
   ));
+
+-- Profiles are readable by their owner and written only by the Stripe
+-- webhook through the service role. There is deliberately no update policy:
+-- a user who could write their own row could set their own plan to 'studio'.
+alter table profiles enable row level security;
+drop policy if exists "own profile" on profiles;
+create policy "own profile" on profiles for select
+  using (auth.uid() = user_id);
+
+-- Give every new account a profile at signup, so the plan lookup never has
+-- to reason about a user who has one and a user who does not.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (user_id) values (new.id)
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Backfill anyone who signed up before the trigger existed.
+insert into public.profiles (user_id)
+select id from auth.users
+on conflict (user_id) do nothing;
 
 -- ── Original permissive policies (not applied) ───────────
 -- create policy "public read posts"    on posts         for select using (true);

@@ -3,13 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/stripe";
+import { clientLimitFor, limitMessage } from "@/lib/plans";
 import type { Client, ClientMode } from "@/types/database";
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 
 export type CreateClientResult =
   | { ok: true; client: Client }
-  | { ok: false; error: string };
+  /** `atLimit` lets the caller offer an upgrade rather than just an error. */
+  | { ok: false; error: string; atLimit?: boolean };
 
 /**
  * Create a client workspace.
@@ -29,6 +32,22 @@ export async function createClientRecord(input: {
 
   const name = input.name?.trim();
   if (!name) return { ok: false, error: "Give this client a name." };
+
+  // Plan ceiling. Checked on the server because the button that respects it
+  // lives in the browser, where it can simply be ignored.
+  const profile = await getProfile(user.id);
+  const limit = clientLimitFor(profile.plan);
+
+  if (Number.isFinite(limit)) {
+    const supabase = createClient();
+    const { count } = await supabase
+      .from("clients")
+      .select("id", { count: "exact", head: true });
+
+    if ((count ?? 0) >= limit) {
+      return { ok: false, error: limitMessage(profile.plan), atLimit: true };
+    }
+  }
 
   const mode: ClientMode = input.mode === "design" ? "design" : "social";
 

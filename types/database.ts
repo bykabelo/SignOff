@@ -67,6 +67,17 @@ export type Comment = {
   created_at: string;
 };
 
+export type Plan = "free" | "solo" | "studio";
+
+export type Profile = {
+  user_id: string;
+  plan: Plan;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  current_period_end: string | null;
+  updated_at: string;
+};
+
 export type ClientAsset = {
   id: string;
   post_id: string;
@@ -106,6 +117,7 @@ export type Database = {
       post_versions: Table<PostVersion>;
       comments: Table<Comment>;
       client_assets: Table<ClientAsset>;
+      profiles: Table<Profile>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

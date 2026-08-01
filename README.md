@@ -56,7 +56,35 @@ account — verify your own domain before real use.
 Email is optional in development: with no key set, notifications log a
 warning and skip. Nothing else breaks.
 
-### 4. Run
+### 4. Stripe (optional)
+
+The app runs fine without it — the billing page reports that billing isn't
+configured and everyone stays on the free plan. To turn it on:
+
+1. Create two recurring products in Stripe: **Solo $9/month** and
+   **Studio $19/month**. Copy each one's *price* ID (`price_...`, not the
+   product ID) into `STRIPE_PRICE_SOLO` and `STRIPE_PRICE_STUDIO`.
+2. Add `STRIPE_SECRET_KEY`.
+3. Locally, forward webhooks and use the signing secret it prints:
+
+   ```bash
+   stripe listen --forward-to localhost:3000/api/stripe/webhook
+   ```
+
+   In production, add an endpoint at `/api/stripe/webhook` subscribed to
+   `checkout.session.completed` and `customer.subscription.*`, then copy its
+   signing secret into `STRIPE_WEBHOOK_SECRET`.
+
+Plan limits: free = 1 client, Solo = 5, Studio = unlimited. The ceiling is
+enforced server-side in `createClientRecord`, not in the button that
+respects it — a limit checked only in the browser is a suggestion.
+
+The webhook is the only thing that ever writes `profiles.plan`. Nothing in
+the app changes a plan from a user action, so a replayed request cannot
+grant anyone an upgrade. `past_due` keeps its plan through Stripe's retry
+window rather than cutting access off on the first failed charge.
+
+### 5. Run
 
 ```bash
 npm run dev
@@ -106,15 +134,19 @@ app/
   (auth)/login, signup, onboarding
   (dashboard)/dashboard               client list, metrics, activity
   (dashboard)/dashboard/clients/[id]  workspace: upload, versions, requests
+  (dashboard)/dashboard/billing       plan picker, Stripe portal
   review/[token]                      PUBLIC — social or design by client.mode
   api/
     approve, comment, client-upload   public, token-validated
     upload, version, request-asset    creator only
+    stripe/checkout, stripe/portal    creator only
+    stripe/webhook                    public, signature-authenticated
 lib/
   supabase/{client,server,admin}.ts
   review-token.ts                     the security boundary for public routes
   data.ts                             read layer for all three surfaces
   auth-actions.ts, client-actions.ts
+  plans.ts, stripe.ts                 plan limits and billing
   uploads.ts, resend.ts, api.ts
 types/database.ts
 middleware.ts

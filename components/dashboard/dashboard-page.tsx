@@ -318,6 +318,7 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<ClientMode>("social");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [atLimit, setAtLimit] = useState(false);
 
   async function handleCreate() {
     if (!name.trim() || busy) return;
@@ -329,6 +330,9 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
 
     if (!result.ok) {
       setError(result.error);
+      // Hitting the plan ceiling is not a failure to apologise for — it is
+      // the moment to offer the upgrade.
+      setAtLimit(Boolean(result.atLimit));
       return;
     }
 
@@ -419,23 +423,36 @@ function NewClientModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {error ? (
-          <p
+          <div
             role="alert"
-            className="mb-3 rounded-[10px] bg-changes-bg px-3.5 py-2.5 text-[13px] text-changes-fg"
+            className={`mb-3 rounded-[10px] px-3.5 py-2.5 text-[13px] ${
+              atLimit
+                ? "bg-pending-bg text-pending-fg"
+                : "bg-changes-bg text-changes-fg"
+            }`}
           >
             {error}
-          </p>
+          </div>
         ) : null}
 
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={!name.trim() || busy}
-          className="w-full rounded-[10px] py-3 text-sm font-medium text-white transition-colors"
-          style={{ background: name.trim() && !busy ? "#1a1917" : "#d3d1c7" }}
-        >
-          {busy ? "Creating…" : "Create client workspace"}
-        </button>
+        {atLimit ? (
+          <Link
+            href="/dashboard/billing"
+            className="block w-full rounded-[10px] bg-[#1a1917] py-3 text-center text-sm font-medium text-white"
+          >
+            See plans
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={!name.trim() || busy}
+            className="w-full rounded-[10px] py-3 text-sm font-medium text-white transition-colors"
+            style={{ background: name.trim() && !busy ? "#1a1917" : "#d3d1c7" }}
+          >
+            {busy ? "Creating…" : "Create client workspace"}
+          </button>
+        )}
       </div>
     </div>
   );

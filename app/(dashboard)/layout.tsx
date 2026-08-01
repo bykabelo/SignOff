@@ -29,8 +29,14 @@ export default async function DashboardLayout({
             Signoff
           </Link>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <span className="hidden text-sm text-muted sm:inline">{name}</span>
+            <Link
+              href="/dashboard/billing"
+              className="text-sm text-muted transition-colors hover:text-ink"
+            >
+              Plan
+            </Link>
             <form action={signOut}>
               <button
                 type="submit"

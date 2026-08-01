@@ -17,7 +17,11 @@ const PROTECTED_API = [
   "/api/upload",
   "/api/version",
   "/api/request-asset",
+  "/api/stripe/checkout",
+  "/api/stripe/portal",
 ];
+// Note: /api/stripe/webhook is deliberately absent. Stripe calls it with no
+// session; it authenticates itself by signature instead.
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

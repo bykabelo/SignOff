@@ -526,7 +526,8 @@ html {
   display: none;
 }
 
-/* ── Social proof ────────────────────────────────────────── */
+/* ── Founder note ────────────────────────────────────────── */
+/* Occupies the band the logo strip had, with the same padding and rules. */
 
 .landing .proof {
   padding: 44px 0;
@@ -543,20 +544,31 @@ html {
   margin-bottom: 22px;
 }
 
-.landing .proof-logos {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 44px;
-  flex-wrap: wrap;
-  opacity: 0.5;
+/*
+ * --ink-soft rather than --muted: at this size, centred over the warm
+ * background, --muted lands around 3.5:1 and is a strain to read. This is
+ * the one paragraph on the page that asks to be believed, so it should be
+ * legible without being loud.
+ */
+.landing .founder-note {
+  max-width: 620px;
+  margin: 0 auto;
+  text-align: center;
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--ink-soft);
 }
 
-.landing .proof-logo {
-  font-weight: 600;
-  font-size: 17px;
-  color: var(--ink-soft);
-  letter-spacing: -0.01em;
+.landing .founder-attr {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.landing .founder-attr strong {
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* ── Sections ────────────────────────────────────────────── */

@@ -390,19 +390,18 @@ export function LandingPage() {
         </div>
       </header>
 
-      {/* ── Social proof ──────────────────────────────────── */}
+      {/* ── Founder note ──────────────────────────────────── */}
       <section className="proof">
         <div className="wrap">
-          <p className="proof-label">
-            Trusted by freelancers &amp; studios who ship client work
+          <p className="proof-label">Built by a working studio</p>
+          <p className="founder-note">
+            We built Signoff because we were tired of chasing clients across
+            email, DMs, and Google Docs just to get a simple yes. It&rsquo;s
+            the tool we wanted — so we made it.
           </p>
-          <div className="proof-logos">
-            <span className="proof-logo">RevHaus</span>
-            <span className="proof-logo">Northside Co.</span>
-            <span className="proof-logo">Studio Meridian</span>
-            <span className="proof-logo">Bloom &amp; Co</span>
-            <span className="proof-logo">Kane Creative</span>
-          </div>
+          <p className="founder-attr">
+            <strong>Kabelo M.</strong> · Founder, RevHaus Studio
+          </p>
         </div>
       </section>
 

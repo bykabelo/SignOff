@@ -23,7 +23,19 @@ const PROTECTED_API = [
 // Note: /api/stripe/webhook is deliberately absent. Stripe calls it with no
 // session; it authenticates itself by signature instead.
 
+/**
+ * Paths with no session to refresh and nothing to gate. Returning before the
+ * Supabase client is constructed keeps the marketing page independent of
+ * Supabase configuration entirely — otherwise a missing env var takes down
+ * the homepage along with the app.
+ */
+const PUBLIC_PATHS = new Set(["/"]);
+
 export async function middleware(request: NextRequest) {
+  if (PUBLIC_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

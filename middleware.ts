@@ -10,6 +10,11 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * `/onboarding` is also public: its first step is creating the account, so
  * requiring a session to reach it would lock every new user out of signup.
+ *
+ * So is the whole password-reset path — `/forgot-password`, `/auth/callback`
+ * and `/reset-password`. Someone who cannot sign in is exactly who needs
+ * them, so gating any of the three would lock out the only people they are
+ * for. Only add a prefix below that a signed-out user should never reach.
  */
 const PROTECTED_PREFIXES = ["/dashboard"];
 

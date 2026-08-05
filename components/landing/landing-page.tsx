@@ -229,7 +229,7 @@ export function LandingPage() {
                           className="mock-img"
                           style={{
                             backgroundImage:
-                              "url('https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=400&q=70')",
+                              "url('https://images.unsplash.com/photo-1584048603508-4b31894439a9?q=80&w=1310&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')",
                           }}
                         />
                         <div className="mock-card-body">
@@ -269,7 +269,7 @@ export function LandingPage() {
                   <div className="mock-body">
                     <div className="mock-deliverable">
                       <div className="mock-del-head">
-                        <span className="mock-del-title">Logo concepts</span>
+                        <span className="mock-del-title">Package concepts</span>
                         <span
                           className="mock-status"
                           style={{
@@ -298,7 +298,7 @@ export function LandingPage() {
                         className="mock-del-img"
                         style={{
                           backgroundImage:
-                            "url('https://images.unsplash.com/photo-1626785774573-4b799315345d?w=500&q=70')",
+                            "url('https://images.unsplash.com/photo-1633533446213-a438ff5f0629?q=80&w=1314&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')",
                         }}
                       />
                       <div style={{ padding: "11px 15px", display: "flex", gap: 6 }}>
@@ -366,8 +366,8 @@ export function LandingPage() {
                           lineHeight: 1.4,
                         }}
                       >
-                        Please upload your team&rsquo;s headshots to finish the
-                        business cards.
+                        Please upload your new updated logos to finish the
+                        package design
                       </div>
                       <div className="mock-upload">
                         <div style={{ fontSize: 16, marginBottom: 3 }}>⬆️</div>

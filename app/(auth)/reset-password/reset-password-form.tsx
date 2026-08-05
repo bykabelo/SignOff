@@ -3,67 +3,117 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
 type Status = "checking" | "ready" | "invalid";
 
 /**
- * Sets a new password from a recovery link.
+ * Reads whatever Supabase put in the URL and turns it into a session.
  *
- * Session detection runs in the browser rather than on the server because
- * the two link flows deliver the session differently. PKCE has already been
- * exchanged into a cookie by /auth/callback, which the server could read —
- * but an implicit-flow link arrives as a URL fragment, and a fragment is
- * never sent to the server. Checking here covers both.
+ * Three shapes can arrive, depending on project settings and the email
+ * template, so all three are handled rather than assumed:
+ *
+ *   ?code=…                  PKCE. What @supabase/ssr produces by default,
+ *                            since it hardcodes flowType: "pkce".
+ *   ?token_hash=…&type=…     OTP, when the template uses {{ .TokenHash }}.
+ *   #access_token=…          Implicit, if the project is set that way.
+ *
+ * Supabase can also report failure in either the query string or the hash,
+ * and its reason is worth showing: "expired" and "opened in the wrong
+ * browser" look identical otherwise.
  */
-export function ResetPasswordForm({ linkFailed }: { linkFailed: boolean }) {
+export function ResetPasswordForm({
+  serverError,
+}: {
+  serverError?: string | null;
+}) {
   const [status, setStatus] = useState<Status>(
-    linkFailed ? "invalid" : "checking",
+    serverError ? "invalid" : "checking",
   );
+  const [reason, setReason] = useState<string | null>(serverError ?? null);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (linkFailed) return;
+    if (serverError) return;
 
     const supabase = createClient();
     let active = true;
 
-    // A fragment-borne session is parsed asynchronously after mount, so the
-    // listener is what catches it; getSession covers the cookie case.
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active && session) setStatus("ready");
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const finish = (ok: boolean, why?: string) => {
       if (!active) return;
-      if (session) {
+      if (ok) {
         setStatus("ready");
-        return;
-      }
-      // Give the fragment a moment to be consumed before calling it dead,
-      // otherwise a valid link flashes an error on the way in.
-      const hasPendingAuth =
-        window.location.hash.includes("access_token") ||
-        window.location.hash.includes("error");
-      if (!hasPendingAuth) {
+        // Drop the credential from the address bar so a refresh does not
+        // replay a code that has already been consumed.
+        window.history.replaceState({}, "", window.location.pathname);
+      } else {
+        setReason(why ?? null);
         setStatus("invalid");
+      }
+    };
+
+    async function resolve() {
+      const query = new URLSearchParams(window.location.search);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+      // Supabase reports its own failures in one or the other.
+      const reported =
+        query.get("error_description") ?? hash.get("error_description");
+      if (reported) {
+        finish(false, reported.replace(/\+/g, " "));
         return;
       }
-      setTimeout(() => {
-        if (!active) return;
-        setStatus((current) => (current === "checking" ? "invalid" : current));
-      }, 1500);
-    });
+
+      const code = query.get("code");
+      if (code) {
+        const { error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(code);
+        finish(!exchangeError, exchangeError?.message);
+        return;
+      }
+
+      const tokenHash = query.get("token_hash");
+      const type = query.get("type") as EmailOtpType | null;
+      if (tokenHash && type) {
+        const { error: otpError } = await supabase.auth.verifyOtp({
+          type,
+          token_hash: tokenHash,
+        });
+        finish(!otpError, otpError?.message);
+        return;
+      }
+
+      // Implicit flow, or an already-established session. detectSessionInUrl
+      // consumes the fragment asynchronously, so allow for it arriving late.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        finish(true);
+        return;
+      }
+
+      if (hash.get("access_token")) {
+        setTimeout(async () => {
+          const { data: retry } = await supabase.auth.getSession();
+          finish(
+            Boolean(retry.session),
+            retry.session ? undefined : "That link could not be verified.",
+          );
+        }, 1500);
+        return;
+      }
+
+      finish(false, "This page was opened without a reset link.");
+    }
+
+    void resolve();
 
     return () => {
       active = false;
-      subscription.unsubscribe();
     };
-  }, [linkFailed]);
+  }, [serverError]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -91,29 +141,24 @@ export function ResetPasswordForm({ linkFailed }: { linkFailed: boolean }) {
     }
 
     /*
-     * A recovery link leaves the user signed in. Ending that session does
-     * two things: it proves the new password works by making them use it,
-     * and it stops the middleware bouncing them straight from /login to
-     * /dashboard on the redirect below.
-     *
-     * A full navigation rather than router.push, so the server is guaranteed
-     * to see the cleared cookie rather than racing it.
+     * A recovery link leaves the user signed in. Ending that session makes
+     * them prove the new password, and stops the middleware bouncing them
+     * from /login to /dashboard on arrival. A full navigation, so the server
+     * sees the cleared cookie rather than racing it.
      */
     await supabase.auth.signOut();
     window.location.assign("/login?reset=success");
   }
 
   if (status === "checking") {
-    return (
-      <p className="text-sm text-muted">Checking your link…</p>
-    );
+    return <p className="text-sm text-muted">Checking your link…</p>;
   }
 
   if (status === "invalid") {
     return (
       <div>
         <p className="rounded-soft bg-changes-bg px-4 py-3 text-sm leading-relaxed text-changes-fg">
-          This reset link is no longer valid.
+          {reason ?? "This reset link is no longer valid."}
         </p>
         <p className="mt-4 text-sm leading-relaxed text-muted">
           Reset links expire after an hour and can only be used once. They also

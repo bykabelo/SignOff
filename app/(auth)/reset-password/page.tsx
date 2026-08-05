@@ -12,8 +12,16 @@ export const metadata: Metadata = {
 export default function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; error_description?: string };
 }) {
+  // Only a failure reported by /auth/callback is passed down. Anything
+  // Supabase puts in the URL itself is read client-side, since a hash
+  // fragment never reaches the server.
+  const serverError =
+    searchParams.error === "link_invalid"
+      ? (searchParams.error_description ?? "This reset link is no longer valid.")
+      : null;
+
   return (
     <AuthShell>
       <div className="w-full max-w-[400px]">
@@ -24,7 +32,7 @@ export default function ResetPasswordPage({
         </p>
 
         <div className="card mt-7 p-6">
-          <ResetPasswordForm linkFailed={searchParams.error === "link_invalid"} />
+          <ResetPasswordForm serverError={serverError} />
         </div>
 
         <p className="mt-6 text-center text-sm text-muted">

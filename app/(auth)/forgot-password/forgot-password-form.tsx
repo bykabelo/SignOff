@@ -24,10 +24,24 @@ export function ForgotPasswordForm() {
     setBusy(true);
     setError(null);
 
+    /*
+     * Points straight at /reset-password, with no query string.
+     *
+     * Supabase only honours redirect_to when it matches the project's
+     * Redirect URLs allowlist; anything else is silently swapped for the
+     * Site URL, which lands the user on the marketing page with no clue why.
+     * A bare path is the easiest possible thing to allowlist exactly.
+     *
+     * NEXT_PUBLIC_APP_URL is preferred over window.location.origin so the
+     * link is pinned to the canonical domain — a Vercel preview deployment
+     * has its own origin, which would never be on the allowlist.
+     */
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+
     const supabase = createClient();
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email.trim(),
-      { redirectTo: `${window.location.origin}/auth/callback?next=/reset-password` },
+      { redirectTo: `${appUrl}/reset-password` },
     );
 
     setBusy(false);

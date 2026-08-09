@@ -794,9 +794,9 @@ export function LandingPage() {
       <footer>
         <div className="wrap footer-inner">
           <Link href="/" className="logo" aria-label="Signoff home">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             {/* Same class as the nav for `display`, sized smaller inline.
                 The mobile swap is scoped to .nav-inner, so this one stays. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/signoff-lockup.svg"
               alt=""

@@ -48,6 +48,8 @@ export async function getProfile(userId: string): Promise<Profile> {
     .select()
     .single();
 
+  // Last-resort shape if even the insert failed, so callers always get a
+  // whole Profile rather than having to null-check every field.
   return (
     created ?? {
       user_id: userId,
@@ -56,6 +58,13 @@ export async function getProfile(userId: string): Promise<Profile> {
       stripe_subscription_id: null,
       current_period_end: null,
       updated_at: new Date().toISOString(),
+      display_name: null,
+      avatar_url: null,
+      agency_name: null,
+      agency_logo_url: null,
+      notify_approvals: true,
+      notify_comments: true,
+      notify_assets: true,
     }
   );
 }

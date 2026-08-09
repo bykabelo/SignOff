@@ -16,12 +16,18 @@ import { NextResponse, type NextRequest } from "next/server";
  * them, so gating any of the three would lock out the only people they are
  * for. Only add a prefix below that a signed-out user should never reach.
  */
-const PROTECTED_PREFIXES = ["/dashboard"];
+/*
+ * `/settings` is listed separately because it lives in the (dashboard)
+ * route group, and a route group adds no path segment — the URL is
+ * /settings, not /dashboard/settings, so the prefix above does not cover it.
+ */
+const PROTECTED_PREFIXES = ["/dashboard", "/settings"];
 
 const PROTECTED_API = [
   "/api/upload",
   "/api/version",
   "/api/request-asset",
+  "/api/profile-image",
   "/api/stripe/checkout",
   "/api/stripe/portal",
 ];

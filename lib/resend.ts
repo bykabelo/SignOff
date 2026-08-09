@@ -2,7 +2,7 @@ import "server-only";
 
 import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { Client } from "@/types/database";
+import type { Client, NotificationKind } from "@/types/database";
 
 /**
  * Transactional email.
@@ -87,11 +87,54 @@ async function creatorEmail(client: Client): Promise<string | null> {
   }
 }
 
-async function send(client: Client, subject: string, html: string) {
+/**
+ * Whether the creator still wants this kind of email.
+ *
+ * Defaults to sending: a profile row that is missing, or a lookup that
+ * fails, should not silently swallow the one notification the product
+ * exists to deliver.
+ *
+ * All three columns are selected with a literal string so postgrest can
+ * type the result — a column name interpolated at runtime infers as an
+ * error type instead.
+ */
+async function wants(client: Client, kind: NotificationKind): Promise<boolean> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("profiles")
+      .select("notify_approvals, notify_comments, notify_assets")
+      .eq("user_id", client.user_id)
+      .maybeSingle();
+
+    if (!data) return true;
+
+    const value =
+      kind === "approvals"
+        ? data.notify_approvals
+        : kind === "comments"
+          ? data.notify_comments
+          : data.notify_assets;
+
+    return value !== false;
+  } catch (error) {
+    console.error("[signoff] could not read notification preference", error);
+    return true;
+  }
+}
+
+async function send(
+  client: Client,
+  kind: NotificationKind,
+  subject: string,
+  html: string,
+) {
   if (!resend) {
     console.warn("[signoff] RESEND_API_KEY not set — skipping notification");
     return;
   }
+
+  if (!(await wants(client, kind))) return;
 
   const to = await creatorEmail(client);
   if (!to) return;
@@ -122,6 +165,7 @@ export async function notifyApproval(
 
   await send(
     client,
+    "approvals",
     subject,
     shell({
       accent: approved ? "#27500A" : "#712B13",
@@ -144,6 +188,7 @@ export async function notifyComment(
 ) {
   await send(
     client,
+    "comments",
     `${author} commented on ${itemLabel}`,
     shell({
       accent: accentFor(client),
@@ -163,6 +208,7 @@ export async function notifyClientUpload(
 ) {
   await send(
     client,
+    "assets",
     `${client.name} sent you a file for ${itemLabel}`,
     shell({
       accent: accentFor(client),

@@ -76,7 +76,17 @@ export type Profile = {
   stripe_subscription_id: string | null;
   current_period_end: string | null;
   updated_at: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  agency_name: string | null;
+  agency_logo_url: string | null;
+  notify_approvals: boolean;
+  notify_comments: boolean;
+  notify_assets: boolean;
 };
+
+/** The notification toggles, keyed by the event they gate. */
+export type NotificationKind = "approvals" | "comments" | "assets";
 
 export type ClientAsset = {
   id: string;

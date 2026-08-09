@@ -85,6 +85,18 @@ create table if not exists profiles (
   updated_at timestamptz default now()
 );
 
+-- Settings fields. See supabase/migrations/0001_profile_settings.sql, which
+-- also carries the column-level grants that let a user edit these without
+-- being able to touch `plan`.
+alter table profiles
+  add column if not exists display_name     text,
+  add column if not exists avatar_url       text,
+  add column if not exists agency_name      text,
+  add column if not exists agency_logo_url  text,
+  add column if not exists notify_approvals boolean not null default true,
+  add column if not exists notify_comments  boolean not null default true,
+  add column if not exists notify_assets    boolean not null default true;
+
 -- ── Indexes ──────────────────────────────────────────────
 -- The review page loads a whole client workspace in one shot; these keep
 -- that a handful of index scans rather than sequential scans.

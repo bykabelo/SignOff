@@ -59,7 +59,19 @@ export const PLANS: Record<
 
 export const PLAN_ORDER: Plan[] = ["free", "solo", "studio"];
 
-export function clientLimitFor(plan: Plan) {
+/**
+ * How many clients this account may have.
+ *
+ * `isAdmin` is the founder bypass: a flagged account is unlimited whatever
+ * its plan says. The flag lives on the profile and can only be set with the
+ * service role, so this cannot be turned on from the app.
+ *
+ * It is a parameter rather than a separate function so that every call site
+ * has to decide about it — a second `adminClientLimitFor` would be easy to
+ * forget at exactly the place that matters.
+ */
+export function clientLimitFor(plan: Plan, isAdmin = false) {
+  if (isAdmin) return Number.POSITIVE_INFINITY;
   return PLANS[plan]?.clientLimit ?? PLANS.free.clientLimit;
 }
 

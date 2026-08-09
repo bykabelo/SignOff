@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PLANS, PLAN_ORDER } from "@/lib/plans";
+import { PLANS, PLAN_ORDER, clientLimitFor } from "@/lib/plans";
 import type { Plan } from "@/types/database";
 
 /**
@@ -16,12 +16,14 @@ export function Billing({
   hasBilling,
   renewsOn,
   upgraded,
+  isAdmin = false,
 }: {
   plan: Plan;
   clientCount: number;
   hasBilling: boolean;
   renewsOn: string | null;
   upgraded: boolean;
+  isAdmin?: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function Billing({
   }
 
   const current = PLANS[plan];
-  const limit = current.clientLimit;
+  const limit = clientLimitFor(plan, isAdmin);
 
   return (
     <div>
@@ -62,6 +64,13 @@ export function Billing({
         {limit === 1 ? "" : "s"}.
         {renewsOn ? ` Renews ${renewsOn}.` : ""}
       </p>
+
+      {isAdmin ? (
+        <p className="mt-5 rounded-soft bg-approved-bg px-4 py-3 text-sm leading-relaxed text-approved-fg">
+          Founder access is on for this account — plan limits do not apply,
+          whichever plan is shown below.
+        </p>
+      ) : null}
 
       {upgraded ? (
         <p className="mt-5 rounded-soft bg-approved-bg px-4 py-3 text-sm text-approved-fg">

@@ -34,9 +34,10 @@ export async function createClientRecord(input: {
   if (!name) return { ok: false, error: "Give this client a name." };
 
   // Plan ceiling. Checked on the server because the button that respects it
-  // lives in the browser, where it can simply be ignored.
+  // lives in the browser, where it can simply be ignored. An admin profile
+  // returns Infinity here, so the count below is skipped entirely.
   const profile = await getProfile(user.id);
-  const limit = clientLimitFor(profile.plan);
+  const limit = clientLimitFor(profile.plan, profile.is_admin);
 
   if (Number.isFinite(limit)) {
     const supabase = createClient();

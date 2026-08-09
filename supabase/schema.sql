@@ -102,6 +102,11 @@ alter table profiles
   add column if not exists notify_comments  boolean not null default true,
   add column if not exists notify_assets    boolean not null default true;
 
+-- Founder/admin bypass. Not in the column grants below, so a user cannot
+-- set it on themselves — see supabase/migrations/0003_admin_bypass.sql.
+alter table profiles
+  add column if not exists is_admin boolean not null default false;
+
 -- ── Indexes ──────────────────────────────────────────────
 -- The review page loads a whole client workspace in one shot; these keep
 -- that a handful of index scans rather than sequential scans.

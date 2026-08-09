@@ -52,6 +52,7 @@ export default async function SettingsPage() {
           plan={profile.plan}
           clientCount={count ?? 0}
           renewsOn={renewsOn}
+          isAdmin={profile.is_admin}
         />
       </div>
     </div>

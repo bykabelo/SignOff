@@ -9,7 +9,7 @@ import {
   saveProfile,
   setNotification,
 } from "@/lib/settings-actions";
-import { PLANS } from "@/lib/plans";
+import { PLANS, clientLimitFor } from "@/lib/plans";
 import { ImageUpload } from "./image-upload";
 import {
   Field,
@@ -362,13 +362,15 @@ export function PlanSection({
   plan,
   clientCount,
   renewsOn,
+  isAdmin = false,
 }: {
   plan: Plan;
   clientCount: number;
   renewsOn: string | null;
+  isAdmin?: boolean;
 }) {
   const current = PLANS[plan];
-  const limit = current.clientLimit;
+  const limit = clientLimitFor(plan, isAdmin);
 
   return (
     <SettingsCard
@@ -391,6 +393,11 @@ export function PlanSection({
             {clientCount} of {Number.isFinite(limit) ? limit : "unlimited"}{" "}
             client{limit === 1 ? "" : "s"} in use
           </p>
+          {isAdmin ? (
+            <p className="mt-1.5 text-sm text-approved-fg">
+              Founder access — plan limits do not apply to this account.
+            </p>
+          ) : null}
         </div>
 
         <Link

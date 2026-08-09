@@ -65,6 +65,9 @@ export async function getProfile(userId: string): Promise<Profile> {
       notify_approvals: true,
       notify_comments: true,
       notify_assets: true,
+      // Never assume admin on a fallback — the bypass has to come from a
+      // row that genuinely carries the flag.
+      is_admin: false,
     }
   );
 }

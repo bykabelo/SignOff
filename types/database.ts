@@ -85,6 +85,12 @@ export type Profile = {
   notify_approvals: boolean;
   notify_comments: boolean;
   notify_assets: boolean;
+  /**
+   * Founder/admin bypass: every plan limit is treated as unlimited.
+   * Writable only by the service role — it is excluded from the column
+   * grants that let users edit their own profile.
+   */
+  is_admin: boolean;
 };
 
 /** The notification toggles, keyed by the event they gate. */

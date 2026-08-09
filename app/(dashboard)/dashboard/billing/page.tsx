@@ -42,6 +42,7 @@ export default async function BillingPage({
           hasBilling={Boolean(profile.stripe_customer_id)}
           renewsOn={renewsOn}
           upgraded={searchParams.upgraded === "1"}
+          isAdmin={profile.is_admin}
         />
       </div>
     </div>

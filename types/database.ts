@@ -32,6 +32,8 @@ export type Client = {
   mode: ClientMode;
   review_token: string;
   created_at: string;
+  /** Estimated completion for design projects. YYYY-MM-DD, or null. */
+  target_date: string | null;
 };
 
 export type Post = {

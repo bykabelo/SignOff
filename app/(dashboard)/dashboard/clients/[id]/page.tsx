@@ -11,6 +11,8 @@ import {
   SocialComposer,
   VersionPusher,
 } from "@/components/workspace/composers";
+import { ProgressTracker } from "@/components/tracker/progress-tracker";
+import { TargetDateControl } from "@/components/tracker/target-date";
 import type { ClientAsset, Comment, Post, PostVersion } from "@/types/database";
 
 export default async function ClientWorkspacePage({
@@ -82,6 +84,21 @@ export default async function ClientWorkspacePage({
           <CopyLink url={reviewUrl} />
         </div>
       </section>
+
+      {/* ── Progress (design mode) ─────────────────────────── */}
+      {client.mode === "design" ? (
+        <div className="mt-7">
+          <ProgressTracker
+            title={client.name}
+            stages={posts}
+            targetDate={client.target_date}
+            accent={accent}
+            heading="Project progress"
+            intro="Stages come from your deliverables and asset requests, in the order you added them."
+          />
+          <TargetDateControl clientId={client.id} value={client.target_date} />
+        </div>
+      ) : null}
 
       {/* ── Compose ────────────────────────────────────────── */}
       <div className="mt-7 flex flex-col gap-3">

@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import { relativeTime } from "@/lib/format";
 import { statusStyle } from "@/lib/status";
-import { ActionError, ReviewProgress, ReviewShell } from "./shell";
+import { ActionError, ReviewShell } from "./shell";
+import { ProgressTracker } from "@/components/tracker/progress-tracker";
 import { addComment, setStatus, uploadAsset } from "./api";
 import type {
   Client,
@@ -470,9 +471,19 @@ export function DesignReviewPage({
     Object.fromEntries(reviewable.map((d) => [d.id, d.status])),
   );
 
-  const approved = Object.values(statuses).filter(
-    (s) => s === "approved",
-  ).length;
+  /*
+   * The tracker reads the same optimistic statuses the cards do, so
+   * approving a stage moves the timeline immediately rather than waiting
+   * for a refresh. status_changed_at is nudged along with it, otherwise a
+   * just-approved stage would show the date of its previous status.
+   */
+  const now = new Date().toISOString();
+  const trackerStages = deliverables.map((item) => {
+    const local = statuses[item.id];
+    return local && local !== item.status
+      ? { ...item, status: local, status_changed_at: now }
+      : item;
+  });
 
   if (deliverables.length === 0) {
     return (
@@ -500,11 +511,17 @@ export function DesignReviewPage({
         </p>
       </div>
 
-      <ReviewProgress
-        approved={approved}
-        total={reviewable.length}
-        accent={accent}
-      />
+      {/* Replaces the plain progress bar: the tracker carries the same
+          counts and percentage, plus where the project actually stands. */}
+      <div className="mb-7">
+        <ProgressTracker
+          title={client.name}
+          stages={trackerStages}
+          targetDate={client.target_date}
+          accent={accent}
+          heading="Where things stand"
+        />
+      </div>
 
       <div className="grid gap-[18px]">
         {deliverables.map((item, i) => (

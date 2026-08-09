@@ -12,8 +12,13 @@ create table if not exists clients (
   logo_url text,
   mode text default 'social',            -- 'social' | 'design'
   review_token uuid default gen_random_uuid() unique,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  -- Estimated completion, shown on the design progress tracker. The only
+  -- part of that tracker not derivable from the deliverables themselves.
+  target_date date
 );
+
+alter table clients add column if not exists target_date date;
 
 -- ── Posts / Deliverables (same table, kind distinguishes) ─
 -- Child rows cascade. Deleting a deliverable has to take its versions,

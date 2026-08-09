@@ -25,8 +25,27 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen flex-col">
       <header className="border-b-hairline border-line">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link href="/dashboard" className="font-serif text-lg text-ink">
-            Signoff
+          {/*
+            The lockup on roomy widths, the icon mark once the header gets
+            tight — the creator's name and the Plan link share this row.
+          */}
+          <Link href="/dashboard" aria-label="Signoff dashboard">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/signoff-lockup.svg"
+              alt=""
+              width={104}
+              height={26}
+              className="hidden h-[26px] w-[104px] sm:block"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/signoff-icon.svg"
+              alt=""
+              width={28}
+              height={28}
+              className="block h-7 w-7 sm:hidden"
+            />
           </Link>
 
           <div className="flex items-center gap-3 sm:gap-4">

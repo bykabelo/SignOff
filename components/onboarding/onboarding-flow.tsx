@@ -243,16 +243,17 @@ function ClientPreview({
 function WelcomeScreen({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-8 pb-6 pt-10 text-center">
-      <div className="mb-7 flex h-16 w-16 items-center justify-center rounded-[18px] bg-ink">
-        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
-          <path
-            d="M6 8h20M6 16h12M6 24h16"
-            stroke="#fff"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-        </svg>
-      </div>
+      {/* The icon mark stands in for the lockup here: the wordmark would be
+          redundant directly above a headline that says the same thing. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/signoff-icon.svg"
+        alt=""
+        width={64}
+        height={64}
+        className="mb-7 h-16 w-16"
+      />
+
 
       <h1 className="mb-3 text-[30px] leading-[1.2] tracking-[-.02em]">
         Client approvals,

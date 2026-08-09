@@ -130,14 +130,40 @@ html {
   letter-spacing: -0.01em;
 }
 
-.landing .logo-mark {
-  width: 30px;
+/*
+ * The lockup is 440x110 in its viewBox — exactly 4:1. Both dimensions are
+ * set on the element so the ratio cannot drift and the space is reserved
+ * before the file loads.
+ */
+/*
+ * Display is set per class, never on a shared `.logo img` rule: an element
+ * selector there outranks a single class, so `display: block` would win
+ * against `.logo-icon { display: none }` and both marks would render.
+ */
+.landing .logo-lockup {
+  display: block;
+  height: 28px;
+  width: 112px;
+}
+
+.landing .logo-icon {
+  display: none;
   height: 30px;
-  background: var(--ink);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 30px;
+}
+
+/*
+ * Below 480px the nav is the lockup plus the "Start free" button, and the
+ * wordmark is the first thing that can go. The footer keeps the lockup at
+ * every width, since it has the room.
+ */
+@media (max-width: 479px) {
+  .landing .nav-inner .logo-lockup {
+    display: none;
+  }
+  .landing .nav-inner .logo-icon {
+    display: block;
+  }
 }
 
 .landing .nav-links {

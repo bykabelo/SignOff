@@ -8,17 +8,6 @@ type Mode = "social" | "design";
 
 /* ── Icons ───────────────────────────────────────────────── */
 
-const LogoMark = ({ size = 15 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-    <path
-      d="M3 4h10M3 8h6M3 12h8"
-      stroke="#fff"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
 const ArrowRight = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <path
@@ -105,11 +94,25 @@ export function LandingPage() {
     <div className="landing" ref={rootRef}>
       <nav className={scrolled ? "scrolled" : undefined}>
         <div className="wrap nav-inner">
-          <Link href="/" className="logo">
-            <span className="logo-mark">
-              <LogoMark />
-            </span>
-            Signoff
+          {/* One accessible name on the link, so the two images (only one of
+              which is ever visible) are not both announced. */}
+          <Link href="/" className="logo" aria-label="Signoff home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/signoff-lockup.svg"
+              alt=""
+              width={112}
+              height={28}
+              className="logo-lockup"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/signoff-icon.svg"
+              alt=""
+              width={30}
+              height={30}
+              className="logo-icon"
+            />
           </Link>
           <div className="nav-links">
             <a href="#modes">Use cases</a>
@@ -790,11 +793,18 @@ export function LandingPage() {
 
       <footer>
         <div className="wrap footer-inner">
-          <Link href="/" className="logo" style={{ fontSize: 15 }}>
-            <span className="logo-mark" style={{ width: 26, height: 26 }}>
-              <LogoMark size={13} />
-            </span>
-            Signoff
+          <Link href="/" className="logo" aria-label="Signoff home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/* Same class as the nav for `display`, sized smaller inline.
+                The mobile swap is scoped to .nav-inner, so this one stays. */}
+            <img
+              src="/signoff-lockup.svg"
+              alt=""
+              width={96}
+              height={24}
+              className="logo-lockup"
+              style={{ height: 24, width: 96 }}
+            />
           </Link>
           <div className="footer-links">
             <a href="#modes">Use cases</a>

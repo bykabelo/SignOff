@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResetPasswordForm } from "./reset-password-form";
@@ -12,15 +13,46 @@ export const metadata: Metadata = {
 export default function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams: { error?: string; error_description?: string };
+  searchParams: {
+    code?: string;
+    token_hash?: string;
+    type?: string;
+    error?: string;
+    error_description?: string;
+  };
 }) {
-  // Only a failure reported by /auth/callback is passed down. Anything
-  // Supabase puts in the URL itself is read client-side, since a hash
-  // fragment never reaches the server.
-  const serverError =
-    searchParams.error === "link_invalid"
-      ? (searchParams.error_description ?? "This reset link is no longer valid.")
-      : null;
+  /*
+   * A code has to be exchanged server-side, where the PKCE verifier cookie
+   * can be read and the resulting session cookies can actually be written —
+   * a Server Component cannot set cookies, and the browser client cannot be
+   * trusted to do it twice.
+   *
+   * Bouncing to /auth/callback rather than pointing resetPasswordForEmail
+   * there directly keeps /reset-password as the only URL Supabase ever
+   * redirects to, so the Redirect URLs allowlist does not need a second
+   * entry. This redirect is server-side, so the page never renders and the
+   * browser client never gets a chance to race the exchange.
+   */
+  if (searchParams.code) {
+    const params = new URLSearchParams({
+      code: searchParams.code,
+      next: "/reset-password",
+    });
+    redirect(`/auth/callback?${params}`);
+  }
+
+  if (searchParams.token_hash && searchParams.type) {
+    const params = new URLSearchParams({
+      token_hash: searchParams.token_hash,
+      type: searchParams.type,
+      next: "/reset-password",
+    });
+    redirect(`/auth/callback?${params}`);
+  }
+
+  const serverError = searchParams.error
+    ? (searchParams.error_description ?? "This reset link is no longer valid.")
+    : null;
 
   return (
     <AuthShell>

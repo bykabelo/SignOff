@@ -3,21 +3,23 @@ import { createClient } from "@/lib/supabase/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
 /**
- * PUBLIC. Where Supabase sends the user after they click an emailed link.
+ * PUBLIC. Turns an emailed link into a session.
  *
- * Two link shapes are accepted, because which one arrives depends on how the
- * project's email templates are written:
+ * This runs in a Route Handler, and that is the whole point. The PKCE code
+ * verifier is written to a cookie when the reset is requested, and the
+ * session that comes back has to be written to cookies too. A Route Handler
+ * can do both: Server Components can read cookies but not set them, and
+ * doing the exchange in the browser means racing supabase-js, which
+ * exchanges the code itself on init and deletes the verifier as it goes —
+ * the second attempt then fails with "code verifier not found in storage".
  *
- *  - `?code=...`        the PKCE flow, which @supabase/ssr uses by default.
- *                       Requires the code_verifier cookie set when the reset
- *                       was requested, so it only works in the same browser.
- *  - `?token_hash=&type=` the OTP flow, used when the email template is
- *                       switched to {{ .TokenHash }}. Carries no browser
- *                       state, so it also works when the mail is opened on
- *                       a different device.
+ * Both link shapes are accepted, since which one arrives depends on the
+ * project's email template:
  *
- * Supporting both means the default template works out of the box and the
- * cross-device upgrade is a template edit rather than a code change.
+ *   ?code=…                PKCE, the @supabase/ssr default.
+ *   ?token_hash=…&type=…   OTP, when the template uses {{ .TokenHash }}.
+ *                          Carries no browser state, so it survives being
+ *                          opened on a different device.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
@@ -34,20 +36,33 @@ export async function GET(request: NextRequest) {
       ? requested
       : "/dashboard";
 
+  const fail = (reason: string) => {
+    const url = new URL(`${origin}${next}`);
+    url.searchParams.set("error", "link_invalid");
+    url.searchParams.set("error_description", reason);
+    return NextResponse.redirect(url);
+  };
+
+  // Supabase can report the failure itself before we ever see a token.
+  const reported = searchParams.get("error_description");
+  if (reported) return fail(reported);
+
   const supabase = createClient();
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
-  } else if (tokenHash && type) {
+    if (error) return fail(error.message);
+    return NextResponse.redirect(`${origin}${next}`);
+  }
+
+  if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({
       type,
       token_hash: tokenHash,
     });
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (error) return fail(error.message);
+    return NextResponse.redirect(`${origin}${next}`);
   }
 
-  // Expired, already used, or opened in a browser that never held the
-  // verifier. The destination decides how to say so.
-  return NextResponse.redirect(`${origin}${next}?error=link_invalid`);
+  return fail("That link was missing its verification token.");
 }

@@ -3,24 +3,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { EmailOtpType } from "@supabase/supabase-js";
 
 type Status = "checking" | "ready" | "invalid";
 
 /**
- * Reads whatever Supabase put in the URL and turns it into a session.
+ * Collects the new password once a recovery session exists.
  *
- * Three shapes can arrive, depending on project settings and the email
- * template, so all three are handled rather than assumed:
+ * This deliberately does not exchange anything. A `?code=` is handled by
+ * /auth/callback before this page renders, because supabase-js exchanges
+ * the code itself on init and deletes the PKCE verifier as it does — a
+ * second exchange from here fails with "code verifier not found in
+ * storage", which reads like a storage bug but is really a double spend.
  *
- *   ?code=…                  PKCE. What @supabase/ssr produces by default,
- *                            since it hardcodes flowType: "pkce".
- *   ?token_hash=…&type=…     OTP, when the template uses {{ .TokenHash }}.
- *   #access_token=…          Implicit, if the project is set that way.
- *
- * Supabase can also report failure in either the query string or the hash,
- * and its reason is worth showing: "expired" and "opened in the wrong
- * browser" look identical otherwise.
+ * All that is left to do here is notice the session. The only case still
+ * worth waiting for is an implicit-flow fragment, which never reaches the
+ * server and is consumed asynchronously after mount.
  */
 export function ResetPasswordForm({
   serverError,
@@ -42,76 +39,46 @@ export function ResetPasswordForm({
     const supabase = createClient();
     let active = true;
 
-    const finish = (ok: boolean, why?: string) => {
-      if (!active) return;
-      if (ok) {
-        setStatus("ready");
-        // Drop the credential from the address bar so a refresh does not
-        // replay a code that has already been consumed.
-        window.history.replaceState({}, "", window.location.pathname);
-      } else {
-        setReason(why ?? null);
-        setStatus("invalid");
-      }
-    };
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active && session) setStatus("ready");
+    });
 
-    async function resolve() {
-      const query = new URLSearchParams(window.location.search);
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+
+      if (data.session) {
+        setStatus("ready");
+        return;
+      }
+
       const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
 
-      // Supabase reports its own failures in one or the other.
-      const reported =
-        query.get("error_description") ?? hash.get("error_description");
+      const reported = hash.get("error_description");
       if (reported) {
-        finish(false, reported.replace(/\+/g, " "));
+        setReason(reported.replace(/\+/g, " "));
+        setStatus("invalid");
         return;
       }
 
-      const code = query.get("code");
-      if (code) {
-        const { error: exchangeError } =
-          await supabase.auth.exchangeCodeForSession(code);
-        finish(!exchangeError, exchangeError?.message);
-        return;
-      }
-
-      const tokenHash = query.get("token_hash");
-      const type = query.get("type") as EmailOtpType | null;
-      if (tokenHash && type) {
-        const { error: otpError } = await supabase.auth.verifyOtp({
-          type,
-          token_hash: tokenHash,
-        });
-        finish(!otpError, otpError?.message);
-        return;
-      }
-
-      // Implicit flow, or an already-established session. detectSessionInUrl
-      // consumes the fragment asynchronously, so allow for it arriving late.
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        finish(true);
-        return;
-      }
-
+      // A fragment is still being consumed; give it a moment before calling
+      // the link dead, so a working link does not flash an error on arrival.
       if (hash.get("access_token")) {
-        setTimeout(async () => {
-          const { data: retry } = await supabase.auth.getSession();
-          finish(
-            Boolean(retry.session),
-            retry.session ? undefined : "That link could not be verified.",
-          );
+        setTimeout(() => {
+          if (!active) return;
+          setStatus((current) => (current === "checking" ? "invalid" : current));
         }, 1500);
         return;
       }
 
-      finish(false, "This page was opened without a reset link.");
-    }
-
-    void resolve();
+      setReason("This page was opened without a reset link.");
+      setStatus("invalid");
+    });
 
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, [serverError]);
 

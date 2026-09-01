@@ -6,6 +6,8 @@ import Link from "next/link";
 import { signUp, saveWorkDetails } from "@/lib/auth-actions";
 import { createClientRecord } from "@/lib/client-actions";
 import { getInitials } from "@/lib/format";
+import { buildReviewUrl } from "@/lib/review-url";
+import { useAbsoluteUrl } from "@/components/ui/use-absolute-url";
 import type { ClientMode } from "@/types/database";
 
 /*
@@ -706,7 +708,7 @@ function DoneScreen({
 
   // The real token, not a generated slug — this link works the moment it is
   // shown, which is the point of ending the flow here.
-  const reviewLink = `${appUrl}/review/${data.reviewToken}`;
+  const reviewLink = useAbsoluteUrl(buildReviewUrl(data.reviewToken, appUrl));
 
   async function handleCopy() {
     try {

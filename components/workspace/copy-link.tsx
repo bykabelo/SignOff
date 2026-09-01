@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useAbsoluteUrl } from "@/components/ui/use-absolute-url";
 
 /**
  * The review link is the whole product, so it is shown in full rather than
  * hidden behind a "copy" icon — the creator often wants to read it, paste it
  * into a message by hand, or check they're sending the right client's.
  */
-export function CopyLink({ url }: { url: string }) {
+export function CopyLink({ url: incoming }: { url: string }) {
   const [copied, setCopied] = useState(false);
+
+  // Never copy a relative path — this link leaves the app the moment it is
+  // pasted, so it has to carry the origin with it.
+  const url = useAbsoluteUrl(incoming);
 
   async function copy() {
     try {

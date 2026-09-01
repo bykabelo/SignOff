@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClientWorkspace } from "@/lib/data";
 import { accentFor, progressOf } from "@/lib/status";
+import { buildReviewUrl } from "@/lib/review-url";
 import { StatusPill } from "@/components/ui/status-pill";
 import { CopyLink } from "@/components/workspace/copy-link";
 import { LockToggle, DeleteButton } from "@/components/workspace/post-actions";
@@ -25,8 +26,7 @@ export default async function ClientWorkspacePage({
 
   const { client, posts, versions, comments, assets } = workspace;
   const accent = accentFor(client);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const reviewUrl = `${appUrl}/review/${client.review_token}`;
+  const reviewUrl = buildReviewUrl(client.review_token);
 
   const reviewable = posts.filter((p) => p.kind !== "asset_request");
   const requests = posts.filter((p) => p.kind === "asset_request");

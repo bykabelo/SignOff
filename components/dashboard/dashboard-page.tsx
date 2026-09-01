@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClientRecord } from "@/lib/client-actions";
 import { getInitials, greeting, relativeTime } from "@/lib/format";
 import { accentFor } from "@/lib/status";
+import { buildReviewUrl } from "@/lib/review-url";
+import { useAbsoluteUrl } from "@/components/ui/use-absolute-url";
 import { StatusPill } from "@/components/ui/status-pill";
 import type {
   ActivityItem,
@@ -328,7 +330,8 @@ function ClientSheet({
   const color = accentFor(client);
   const pct =
     client.total === 0 ? 0 : Math.round((client.approved / client.total) * 100);
-  const reviewUrl = `${appUrl}/review/${client.review_token}`;
+  // Absolute always: this is copied and pasted into a message.
+  const reviewUrl = useAbsoluteUrl(buildReviewUrl(client.review_token, appUrl));
 
   async function handleCopy() {
     try {

@@ -19,11 +19,22 @@ export default async function Dashboard() {
   const userName =
     (user.user_metadata?.name as string | undefined) || user.email || "there";
 
+  // Computed server-side (not in the client component) so the date in the
+  // header matches what was actually rendered on first paint — a client-side
+  // `new Date()` here would hydrate against the visitor's clock and could
+  // print a different day than the server just sent down.
+  const todayLabel = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
   return (
     <DashboardPage
       data={data}
       userName={userName}
       appUrl={process.env.NEXT_PUBLIC_APP_URL ?? ""}
+      todayLabel={todayLabel}
     />
   );
 }

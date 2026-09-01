@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clientForToken } from "@/lib/review-token";
+import { relativeTime } from "@/lib/format";
 import type {
   Client,
   ClientAsset,
@@ -20,6 +21,12 @@ export type ClientSummary = Client & {
   approved: number;
   awaiting: number;
   needsChanges: number;
+  /** True when any of this client's posts has sat awaiting review for
+   *  longer than the "needs attention" threshold. */
+  hasOverdue: boolean;
+  /** Most recent created_at/status_changed_at across this client's posts,
+   *  or null when they have none yet. */
+  lastActivityAt: string | null;
   /**
    * The client's reviewable items, for the dashboard's quick-look sheet.
    * These are already in memory from the counts query, so carrying them
@@ -38,14 +45,47 @@ export type ActivityItem = {
   at: string;
 };
 
+/** A row in the dashboard's "Needs attention" list — always grounded in a
+ *  real post, never a synthesised scenario. */
+export type NeedsAttentionItem = {
+  id: string;
+  kind: "overdue" | "changes";
+  clientId: string;
+  clientName: string;
+  postTitle: string;
+  meta: string;
+};
+
 export type DashboardData = {
   clients: ClientSummary[];
   activity: ActivityItem[];
+  needsAttention: NeedsAttentionItem[];
   metrics: {
     clients: number;
     awaitingReview: number;
     approvedThisWeek: number;
     needsChanges: number;
+    /** Reviewable posts created in the last 7 days. */
+    postsThisWeek: number;
+    /** Of those, how many carry a (free-text) schedule. */
+    scheduledThisWeek: number;
+    /** Revisions requested in the last 7 days. */
+    revisionsThisWeek: number;
+    /** Posts stuck awaiting review past the "needs attention" threshold,
+     *  across all clients — not capped the way `needsAttention` is. */
+    overdueCount: number;
+    /**
+     * Average days between a post's creation and its approval, across all
+     * approved posts. Null when nothing has been approved yet — there is
+     * nothing honest to average.
+     */
+    avgTurnaroundDays: number | null;
+    /**
+     * Rolling 9-day trend of daily avg turnaround, oldest first. A day with
+     * no approvals is 0 — sparse is the honest shape for a new or quiet
+     * account, not something to paper over.
+     */
+    turnaroundTrend: number[];
   };
 };
 
@@ -86,11 +126,18 @@ export async function getDashboardData(): Promise<DashboardData> {
     return {
       clients: [],
       activity: [],
+      needsAttention: [],
       metrics: {
         clients: 0,
         awaitingReview: 0,
         approvedThisWeek: 0,
         needsChanges: 0,
+        postsThisWeek: 0,
+        scheduledThisWeek: 0,
+        revisionsThisWeek: 0,
+        avgTurnaroundDays: null,
+        turnaroundTrend: Array(9).fill(0),
+        overdueCount: 0,
       },
     };
   }
@@ -108,8 +155,15 @@ export async function getDashboardData(): Promise<DashboardData> {
     else byClient.set(post.client_id, [post]);
   }
 
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const OVERDUE_MS = 2 * DAY_MS;
+  const now = Date.now();
+
   const summaries: ClientSummary[] = clients.map((client) => {
     const reviewable = (byClient.get(client.id) ?? []).filter(isReviewable);
+    const timestamps = reviewable.map(
+      (p) => new Date(p.status_changed_at ?? p.created_at).getTime(),
+    );
     return {
       ...client,
       total: reviewable.length,
@@ -118,6 +172,15 @@ export async function getDashboardData(): Promise<DashboardData> {
         (p) => p.status === "pending" || p.status === "ready_for_review",
       ).length,
       needsChanges: reviewable.filter((p) => p.status === "changes").length,
+      hasOverdue: reviewable.some(
+        (p) =>
+          (p.status === "pending" || p.status === "ready_for_review") &&
+          now - new Date(p.status_changed_at ?? p.created_at).getTime() >=
+            OVERDUE_MS,
+      ),
+      lastActivityAt: timestamps.length
+        ? new Date(Math.max(...timestamps)).toISOString()
+        : null,
       posts: reviewable,
     };
   });
@@ -192,9 +255,124 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   activity.sort((a, b) => (a.at < b.at ? 1 : -1));
 
+  /* Reviewable posts (asset requests are the creator's own to-do, not a
+   * client-facing review item) drive every stat and heuristic below. */
+  const reviewablePosts = allPosts.filter(isReviewable);
+
+  const postsThisWeek = reviewablePosts.filter(
+    (p) => new Date(p.created_at).getTime() > weekAgo,
+  );
+  const scheduledThisWeek = postsThisWeek.filter((p) =>
+    p.scheduled_for?.trim(),
+  ).length;
+  const revisionsThisWeek = reviewablePosts.filter(
+    (p) =>
+      p.status === "changes" &&
+      new Date(p.status_changed_at ?? p.created_at).getTime() > weekAgo,
+  ).length;
+
+  /* Avg. turnaround: days between a post's creation and its approval. Only
+   * approved posts have an answer — nothing else has actually finished. */
+  const approvedPosts = reviewablePosts.filter((p) => p.status === "approved");
+  const turnaroundDaysOf = (p: Post) =>
+    (new Date(p.status_changed_at ?? p.created_at).getTime() -
+      new Date(p.created_at).getTime()) /
+    DAY_MS;
+
+  const avgTurnaroundDays = approvedPosts.length
+    ? Math.round(
+        (approvedPosts.reduce((sum, p) => sum + Math.max(0, turnaroundDaysOf(p)), 0) /
+          approvedPosts.length) *
+          10,
+      ) / 10
+    : null;
+
+  // Rolling 9-day trend: bucket each approval by how many days ago it landed
+  // (0 = today), then average turnaround within each bucket. A bucket with
+  // no approvals is 0 rather than interpolated or carried over — a quiet
+  // day is real information, not a gap to smooth away.
+  const bucketSums = Array(9).fill(0);
+  const bucketCounts = Array(9).fill(0);
+  for (const p of approvedPosts) {
+    const approvedAt = new Date(p.status_changed_at ?? p.created_at).getTime();
+    if (Number.isNaN(approvedAt)) continue;
+    const bucket = Math.floor((now - approvedAt) / DAY_MS);
+    if (bucket < 0 || bucket > 8) continue;
+    bucketSums[bucket] += Math.max(0, turnaroundDaysOf(p));
+    bucketCounts[bucket] += 1;
+  }
+  const turnaroundTrend = bucketSums
+    .map((sum, i) => (bucketCounts[i] ? sum / bucketCounts[i] : 0))
+    .reverse(); // oldest (8 days ago) → today
+
+  /* Needs attention: posts stuck awaiting review past a "no response yet"
+   * threshold, and posts a client has actively asked to be changed. Both
+   * come straight from posts/comments already on screen — nothing here is
+   * a guess at intent (e.g. there is no read-receipt to say a client has
+   * "seen but not actioned" something, so that phrasing is avoided). */
+  const overdue = reviewablePosts
+    .filter(
+      (p) =>
+        (p.status === "pending" || p.status === "ready_for_review") &&
+        now - new Date(p.status_changed_at ?? p.created_at).getTime() >=
+          OVERDUE_MS,
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.status_changed_at ?? a.created_at).getTime() -
+        new Date(b.status_changed_at ?? b.created_at).getTime(),
+    );
+
+  const changesRequested = reviewablePosts.filter((p) => p.status === "changes");
+  const changesPostIds = changesRequested.map((p) => p.id);
+
+  const { data: changeComments } = changesPostIds.length
+    ? await supabase
+        .from("comments")
+        .select("*")
+        .in("post_id", changesPostIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as Comment[] };
+
+  const latestCommentByPost = new Map<string, Comment>();
+  for (const c of changeComments ?? []) {
+    if (!latestCommentByPost.has(c.post_id)) latestCommentByPost.set(c.post_id, c);
+  }
+
+  const needsAttention: NeedsAttentionItem[] = [
+    ...overdue.map((p) => ({
+      id: `overdue-${p.id}`,
+      kind: "overdue" as const,
+      clientId: p.client_id,
+      clientName: clientName.get(p.client_id) ?? "Client",
+      postTitle: postLabel(p),
+      meta: `Submitted ${relativeTime(p.created_at)} · still awaiting review`,
+    })),
+    ...changesRequested
+      .sort(
+        (a, b) =>
+          new Date(b.status_changed_at ?? b.created_at).getTime() -
+          new Date(a.status_changed_at ?? a.created_at).getTime(),
+      )
+      .map((p) => {
+        const comment = latestCommentByPost.get(p.id);
+        return {
+          id: `changes-${p.id}`,
+          kind: "changes" as const,
+          clientId: p.client_id,
+          clientName: clientName.get(p.client_id) ?? "Client",
+          postTitle: postLabel(p),
+          meta: comment
+            ? `“${comment.body.slice(0, 90)}${comment.body.length > 90 ? "…" : ""}”`
+            : `Changes requested ${relativeTime(p.status_changed_at ?? p.created_at)}`,
+        };
+      }),
+  ].slice(0, 6);
+
   return {
     clients: summaries,
     activity: activity.slice(0, 20),
+    needsAttention,
     metrics: {
       clients: clients.length,
       awaitingReview: summaries.reduce((n, c) => n + c.awaiting, 0),
@@ -204,6 +382,12 @@ export async function getDashboardData(): Promise<DashboardData> {
           new Date(p.status_changed_at ?? p.created_at).getTime() > weekAgo,
       ).length,
       needsChanges: summaries.reduce((n, c) => n + c.needsChanges, 0),
+      postsThisWeek: postsThisWeek.length,
+      scheduledThisWeek,
+      revisionsThisWeek,
+      avgTurnaroundDays,
+      turnaroundTrend,
+      overdueCount: overdue.length,
     },
   };
 }

@@ -77,3 +77,33 @@ export function greeting(date = new Date()) {
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
+
+/**
+ * "251 characters · 4 hashtags" — both counted straight off the caption
+ * string a client is actually looking at, never a separate stored value
+ * that could drift from it.
+ */
+export function captionStats(caption: string) {
+  const hashtags = caption.match(/#\w+/g)?.length ?? 0;
+  return `${caption.length} character${caption.length === 1 ? "" : "s"}${
+    hashtags > 0 ? ` · ${hashtags} hashtag${hashtags === 1 ? "" : "s"}` : ""
+  }`;
+}
+
+/** A small warm palette to pick a comment avatar color from, deterministically. */
+const AVATAR_COLORS = [
+  "#C8522A",
+  "#534AB7",
+  "#5c6b52",
+  "#9c5b3f",
+  "#4a6b78",
+  "#6b5b7a",
+];
+
+/** Same name always gets the same color, so a commenter is recognisable
+ *  across a thread without storing a color anywhere. */
+export function avatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}

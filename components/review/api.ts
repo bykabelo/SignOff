@@ -67,3 +67,29 @@ export function uploadAsset(token: string, postId: string, file: File) {
   form.set("file", file);
   return post<{ asset: ClientAsset }>("/api/client-upload", form, false);
 }
+
+/**
+ * "Approve remaining" — there is no bulk endpoint, so this is the existing
+ * single-item /api/approve called once per id, in sequence. Sequential
+ * rather than parallel for the same reason the asset-request uploads are:
+ * a client on a flaky connection gets one clear failure instead of five
+ * simultaneous ones, and `onSettled` lets the caller update its optimistic
+ * state item-by-item as each call actually resolves.
+ */
+export async function approveMany(
+  token: string,
+  postIds: string[],
+  onSettled?: (postId: string, ok: boolean) => void,
+): Promise<{ succeeded: string[]; failed: string[] }> {
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+
+  for (const postId of postIds) {
+    const result = await setStatus(token, postId, "approved");
+    if (result.ok) succeeded.push(postId);
+    else failed.push(postId);
+    onSettled?.(postId, result.ok);
+  }
+
+  return { succeeded, failed };
+}

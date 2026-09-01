@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { relativeTime } from "@/lib/format";
+import { useMemo, useRef, useState } from "react";
+import { avatarColor, getInitials, relativeTime } from "@/lib/format";
 import { statusStyle } from "@/lib/status";
-import { ActionError, ReviewShell } from "./shell";
+import { ActionError, FilterTabs, ReviewShell, ReviewSummary, type ReviewFilter } from "./shell";
 import { ProgressTracker } from "@/components/tracker/progress-tracker";
-import { addComment, setStatus, uploadAsset } from "./api";
+import { addComment, approveMany, setStatus, uploadAsset } from "./api";
 import type {
   Client,
   ClientAsset,
@@ -62,6 +62,26 @@ const UploadIcon = () => (
   </svg>
 );
 
+const ImagePlaceholderIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <rect x="3" y="4" width="18" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M21 15l-5-5-9 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+    <path
+      d="M8 2v8M8 10L5 7M8 10l3-3M3 13h10"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 function StatusPill({ status }: { status: PostStatus }) {
   const { label, bg, fg } = statusStyle(status, "client");
   return (
@@ -72,6 +92,13 @@ function StatusPill({ status }: { status: PostStatus }) {
       {label}
     </span>
   );
+}
+
+/** A bucket every reviewable deliverable falls into — drives the filter tabs. */
+function bucketOf(status: PostStatus): ReviewFilter {
+  if (status === "approved") return "approved";
+  if (status === "changes") return "changes";
+  return "awaiting";
 }
 
 /* ── Deliverable ─────────────────────────────────────────── */
@@ -159,7 +186,21 @@ function DeliverableCard({
           <div className="min-w-0 text-[15px] font-medium text-ink">
             {deliverable.title ?? "Untitled"}
           </div>
-          <StatusPill status={status} />
+          <div className="flex shrink-0 items-center gap-2">
+            <StatusPill status={status} />
+            {current?.image_url ? (
+              <a
+                href={current.image_url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Download image"
+                className="hover-emphasis flex h-6 w-6 items-center justify-center rounded-md border-hairline border-[#d3d1c7] text-muted"
+              >
+                <DownloadIcon />
+              </a>
+            ) : null}
+          </div>
         </div>
 
         {versions.length > 1 ? (
@@ -185,7 +226,7 @@ function DeliverableCard({
                   }}
                 >
                   v{version.version_number}
-                  {version.is_latest ? " · latest" : ""}
+                  {active ? " · current" : version.is_latest ? " · latest" : ""}
                 </button>
               );
             })}
@@ -200,7 +241,14 @@ function DeliverableCard({
           role="img"
           aria-label={`${deliverable.title ?? "Deliverable"} version ${current.version_number}`}
         />
-      ) : null}
+      ) : (
+        // No upload action exists here for the client — this is a display
+        // slot, not a drop zone, so it never pretends to be tappable.
+        <div className="flex aspect-[16/10] flex-col items-center justify-center gap-2 bg-[#f4f2ec] text-faint">
+          <ImagePlaceholderIcon />
+          <span className="text-xs">No image yet</span>
+        </div>
+      )}
 
       <div className="px-[18px] py-3.5">
         {current?.note ? (
@@ -227,7 +275,7 @@ function DeliverableCard({
               onClick={() => changeStatus("pending")}
               className="hover-emphasis w-full rounded-[10px] border-hairline border-[#c8c6be] py-2.5 text-xs text-muted"
             >
-              Undo
+              {status === "approved" ? "Approved — undo" : "Undo"}
             </button>
           </div>
         ) : (
@@ -251,24 +299,35 @@ function DeliverableCard({
         )}
 
         <div className="border-t-hairline border-[#eeedea] pt-3">
+          <div className="mb-2.5 text-[11px] text-muted">
+            {comments.length > 0
+              ? `${comments.length} comment${comments.length === 1 ? "" : "s"}`
+              : "No comments yet"}
+          </div>
+
           {comments.map((comment) => (
-            <div
-              key={comment.id}
-              className="mb-2.5 rounded-[10px] bg-[#f6f4ee] px-3 py-2.5"
-            >
-              <div className="mb-1 flex justify-between gap-2">
-                <span className="text-xs font-medium text-[#3d3d3a]">
-                  {comment.author}
-                </span>
-                <span className="shrink-0 text-[11px] text-faint">
-                  {comment.version_id
-                    ? `on v${versionNumber.get(comment.version_id) ?? "?"}`
-                    : relativeTime(comment.created_at)}
-                </span>
+            <div key={comment.id} className="mb-2.5 flex gap-2.5">
+              <span
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white"
+                style={{ background: avatarColor(comment.author) }}
+              >
+                {getInitials(comment.author)}
+              </span>
+              <div className="min-w-0 flex-1 rounded-[10px] bg-[#f6f4ee] px-3 py-2.5">
+                <div className="mb-1 flex justify-between gap-2">
+                  <span className="text-xs font-medium text-[#3d3d3a]">
+                    {comment.author}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-faint">
+                    {comment.version_id
+                      ? `on v${versionNumber.get(comment.version_id) ?? "?"}`
+                      : relativeTime(comment.created_at)}
+                  </span>
+                </div>
+                <p className="text-[13px] leading-relaxed text-[#5F5E5A]">
+                  {comment.body}
+                </p>
               </div>
-              <p className="text-[13px] leading-relaxed text-[#5F5E5A]">
-                {comment.body}
-              </p>
             </div>
           ))}
 
@@ -470,6 +529,39 @@ export function DesignReviewPage({
   const [statuses, setStatuses] = useState<Record<string, PostStatus>>(() =>
     Object.fromEntries(reviewable.map((d) => [d.id, d.status])),
   );
+  const [filter, setFilter] = useState<ReviewFilter>("all");
+
+  const values = reviewable.map((d) => statuses[d.id]);
+  const approved = values.filter((s) => s === "approved").length;
+  const awaiting = values.filter((s) => s === "pending" || s === "ready_for_review").length;
+  const changes = values.filter((s) => s === "changes").length;
+
+  const counts = useMemo(
+    () => ({ all: reviewable.length, awaiting, changes, approved }),
+    [reviewable.length, awaiting, changes, approved],
+  );
+
+  const remainingIds = reviewable
+    .filter((d) => statuses[d.id] !== "approved")
+    .map((d) => d.id);
+
+  async function handleApproveRemaining(ids: string[]) {
+    setStatuses((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = "approved";
+      return next;
+    });
+
+    const { failed } = await approveMany(token, ids);
+
+    if (failed.length) {
+      setStatuses((prev) => {
+        const next = { ...prev };
+        for (const id of failed) next[id] = "pending";
+        return next;
+      });
+    }
+  }
 
   /*
    * The tracker reads the same optimistic statuses the cards do, so
@@ -484,6 +576,34 @@ export function DesignReviewPage({
       ? { ...item, status: local, status_changed_at: now }
       : item;
   });
+
+  // A reviewable deliverable's own filter bucket, keyed by id — locked items
+  // and asset requests aren't part of this workflow, so the filter tabs
+  // never hide or count them; they always render.
+  const bucketById = new Map(
+    reviewable.map((d) => [d.id, bucketOf(statuses[d.id])]),
+  );
+  const visibleDeliverables = deliverables.filter((item) => {
+    if (item.kind !== "deliverable" || item.locked) return true;
+    return filter === "all" || bucketById.get(item.id) === filter;
+  });
+
+  const dueLabel =
+    client.target_date &&
+    new Date(client.target_date).toLocaleDateString("en-US", {
+      weekday: "long",
+      day: "numeric",
+      month: "short",
+    });
+
+  const summarySentence = (() => {
+    const parts: string[] = [
+      `${reviewable.length} deliverable${reviewable.length === 1 ? "" : "s"} to review`,
+    ];
+    if (awaiting > 0) parts.push(`${awaiting} still waiting on you`);
+    if (changes > 0) parts.push(`${changes} back with us for revisions`);
+    return `${parts.join(", ")}. Approve what works, leave a comment where it doesn't.`;
+  })();
 
   if (deliverables.length === 0) {
     return (
@@ -500,19 +620,29 @@ export function DesignReviewPage({
   }
 
   return (
-    <ReviewShell client={client} badge="In progress">
+    <ReviewShell client={client} badge={dueLabel ? `Due ${dueLabel}` : "In progress"}>
       <div className="mb-6" style={{ animation: "slideUp .4s ease" }}>
+        <div className="mb-3 text-[11px] font-medium uppercase tracking-[.1em] text-faint">
+          Review{dueLabel ? ` · Due ${dueLabel}` : ""}
+        </div>
         <h1 className="mb-1.5 text-2xl tracking-[-.02em]">
           Your project is taking shape.
         </h1>
-        <p className="text-[13px] leading-[1.6] text-muted">
-          Review each deliverable, leave feedback, and approve when it&rsquo;s
-          right. We&rsquo;ll keep you posted as things progress.
-        </p>
+        <p className="text-[13px] leading-[1.6] text-muted">{summarySentence}</p>
       </div>
 
-      {/* Replaces the plain progress bar: the tracker carries the same
-          counts and percentage, plus where the project actually stands. */}
+      {reviewable.length > 0 ? (
+        <ReviewSummary
+          total={reviewable.length}
+          approved={approved}
+          awaiting={awaiting}
+          changes={changes}
+          accent={accent}
+          remainingIds={remainingIds}
+          onApproveRemaining={handleApproveRemaining}
+        />
+      ) : null}
+
       <div className="mb-7">
         <ProgressTracker
           title={client.name}
@@ -523,30 +653,40 @@ export function DesignReviewPage({
         />
       </div>
 
-      <div className="grid gap-[18px]">
-        {deliverables.map((item, i) => (
-          <div
-            key={item.id}
-            style={{ animation: `slideUp .4s ease ${i * 0.07}s both` }}
-          >
-            {item.kind === "asset_request" ? (
-              <AssetRequestCard request={item} token={token} accent={accent} />
-            ) : item.locked ? (
-              <LockedCard deliverable={item} />
-            ) : (
-              <DeliverableCard
-                deliverable={item}
-                token={token}
-                clientName={client.name}
-                accent={accent}
-                onStatusChange={(id, status) =>
-                  setStatuses((prev) => ({ ...prev, [id]: status }))
-                }
-              />
-            )}
-          </div>
-        ))}
-      </div>
+      {reviewable.length > 0 ? (
+        <FilterTabs counts={counts} value={filter} onChange={setFilter} />
+      ) : null}
+
+      {visibleDeliverables.length === 0 ? (
+        <div className="card px-5 py-9 text-center text-sm text-faint">
+          Nothing in this filter.
+        </div>
+      ) : (
+        <div className="grid gap-[18px]">
+          {visibleDeliverables.map((item, i) => (
+            <div
+              key={item.id}
+              style={{ animation: `slideUp .4s ease ${i * 0.07}s both` }}
+            >
+              {item.kind === "asset_request" ? (
+                <AssetRequestCard request={item} token={token} accent={accent} />
+              ) : item.locked ? (
+                <LockedCard deliverable={item} />
+              ) : (
+                <DeliverableCard
+                  deliverable={item}
+                  token={token}
+                  clientName={client.name}
+                  accent={accent}
+                  onStatusChange={(id, status) =>
+                    setStatuses((prev) => ({ ...prev, [id]: status }))
+                  }
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </ReviewShell>
   );
 }

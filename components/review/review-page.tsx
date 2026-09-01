@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { relativeTime, spanLabel } from "@/lib/format";
+import { useMemo, useState } from "react";
+import { avatarColor, captionStats, getInitials, relativeTime, spanLabel } from "@/lib/format";
 import { statusStyle } from "@/lib/status";
-import { ActionError, ReviewProgress, ReviewShell } from "./shell";
-import { addComment, setStatus } from "./api";
+import { ActionError, FilterTabs, ReviewShell, ReviewSummary, type ReviewFilter } from "./shell";
+import { addComment, approveMany, setStatus } from "./api";
 import type { Client, Comment, PostStatus, SocialPost } from "@/types/database";
 
 /*
@@ -78,6 +78,33 @@ const CalendarIcon = () => (
     <path d="M5 2V4M11 2V4M2 7H14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
+
+const ImagePlaceholderIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <rect x="3" y="4" width="18" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="8.5" cy="9.5" r="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M21 15l-5-5-9 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+    <path
+      d="M8 2v8M8 10L5 7M8 10l3-3M3 13h10"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** A bucket every post falls into — drives both the filter tabs and their counts. */
+function bucketOf(status: PostStatus): ReviewFilter {
+  if (status === "approved") return "approved";
+  if (status === "changes") return "changes";
+  return "awaiting"; // pending / ready_for_review
+}
 
 /* ── Post card ───────────────────────────────────────────── */
 
@@ -173,7 +200,14 @@ function PostCard({
             </div>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        // No upload action exists here for the client — this is a display
+        // slot, not a drop zone, so it never pretends to be tappable.
+        <div className="flex aspect-square flex-col items-center justify-center gap-2 bg-[#f4f2ec] text-faint">
+          <ImagePlaceholderIcon />
+          <span className="text-xs">No image yet</span>
+        </div>
+      )}
 
       <div className="px-[18px] pt-4">
         <div className="mb-2.5 flex items-center justify-between gap-3">
@@ -185,19 +219,38 @@ function PostCard({
           ) : (
             <span />
           )}
-          <div
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11px] font-medium"
-            style={{ background: style.bg, color: style.fg }}
-          >
-            {style.label}
+          <div className="flex shrink-0 items-center gap-2">
+            <div
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11px] font-medium"
+              style={{ background: style.bg, color: style.fg }}
+            >
+              {style.label}
+            </div>
+            {post.image_url ? (
+              <a
+                href={post.image_url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Download image"
+                className="hover-emphasis flex h-6 w-6 items-center justify-center rounded-md border-hairline border-[#d3d1c7] text-muted"
+              >
+                <DownloadIcon />
+              </a>
+            ) : null}
           </div>
         </div>
 
         {post.caption ? (
-          <p className="mb-4 whitespace-pre-wrap text-sm leading-[1.65] text-[#3d3d3a]">
-            {post.caption}
-          </p>
-        ) : null}
+          <>
+            <p className="mb-1.5 whitespace-pre-wrap text-sm leading-[1.65] text-[#3d3d3a]">
+              {post.caption}
+            </p>
+            <p className="mb-4 text-[11.5px] text-faint">{captionStats(post.caption)}</p>
+          </>
+        ) : (
+          <div className="mb-4" />
+        )}
       </div>
 
       <div className="px-[18px]">
@@ -212,7 +265,7 @@ function PostCard({
             onClick={() => changeStatus("pending")}
             className="hover-emphasis w-full rounded-[10px] border-hairline border-[#c8c6be] py-2.5 text-xs text-muted"
           >
-            Undo
+            {status === "approved" ? "Approved — undo" : "Undo"}
           </button>
         </div>
       ) : (
@@ -249,21 +302,26 @@ function PostCard({
         {commentOpen ? (
           <div className="px-[18px] pb-4">
             {comments.map((comment) => (
-              <div
-                key={comment.id}
-                className="mb-2 rounded-[10px] bg-[#f6f4ee] px-3 py-2.5"
-              >
-                <div className="mb-1 flex justify-between gap-2">
-                  <span className="text-xs font-medium text-[#3d3d3a]">
-                    {comment.author}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-faint">
-                    {relativeTime(comment.created_at)}
-                  </span>
+              <div key={comment.id} className="mb-2 flex gap-2.5">
+                <span
+                  className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white"
+                  style={{ background: avatarColor(comment.author) }}
+                >
+                  {getInitials(comment.author)}
+                </span>
+                <div className="min-w-0 flex-1 rounded-[10px] bg-[#f6f4ee] px-3 py-2.5">
+                  <div className="mb-1 flex justify-between gap-2">
+                    <span className="text-xs font-medium text-[#3d3d3a]">
+                      {comment.author}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-faint">
+                      {relativeTime(comment.created_at)}
+                    </span>
+                  </div>
+                  <p className="text-[13px] leading-relaxed text-[#5F5E5A]">
+                    {comment.body}
+                  </p>
                 </div>
-                <p className="text-[13px] leading-relaxed text-[#5F5E5A]">
-                  {comment.body}
-                </p>
               </div>
             ))}
 
@@ -321,18 +379,59 @@ export function ReviewPage({
   const [statuses, setStatuses] = useState<Record<string, PostStatus>>(() =>
     Object.fromEntries(posts.map((p) => [p.id, p.status])),
   );
+  const [filter, setFilter] = useState<ReviewFilter>("all");
   const [submitted, setSubmitted] = useState(false);
 
   const values = Object.values(statuses);
   const approved = values.filter((s) => s === "approved").length;
-  const allDone =
-    values.length > 0 &&
-    values.every((s) => s !== "pending" && s !== "ready_for_review");
+  const awaiting = values.filter((s) => s === "pending" || s === "ready_for_review").length;
+  const changes = values.filter((s) => s === "changes").length;
+  const allDone = values.length > 0 && awaiting === 0;
   const allApproved = values.length > 0 && values.every((s) => s === "approved");
+
+  const counts = useMemo(
+    () => ({ all: posts.length, awaiting, changes, approved }),
+    [posts.length, awaiting, changes, approved],
+  );
+
+  const visiblePosts =
+    filter === "all" ? posts : posts.filter((p) => bucketOf(statuses[p.id]) === filter);
+
+  const remainingIds = posts
+    .filter((p) => statuses[p.id] !== "approved")
+    .map((p) => p.id);
+
+  async function handleApproveRemaining(ids: string[]) {
+    setStatuses((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = "approved";
+      return next;
+    });
+
+    const { failed } = await approveMany(token, ids);
+
+    // Anything the server rejected reverts — we don't know its prior status
+    // any more once several have moved, so it lands back on "pending" rather
+    // than silently staying marked approved.
+    if (failed.length) {
+      setStatuses((prev) => {
+        const next = { ...prev };
+        for (const id of failed) next[id] = "pending";
+        return next;
+      });
+    }
+  }
 
   const badge = spanLabel(
     posts.map((p) => p.scheduled_for || p.created_at).filter(Boolean),
   );
+
+  const summarySentence = (() => {
+    const parts: string[] = [`${posts.length} post${posts.length === 1 ? "" : "s"} to review`];
+    if (awaiting > 0) parts.push(`${awaiting} still waiting on you`);
+    if (changes > 0) parts.push(`${changes} back with us for revisions`);
+    return `${parts.join(", ")}. Approve what works, leave a comment where it doesn't.`;
+  })();
 
   if (posts.length === 0) {
     return (
@@ -351,35 +450,51 @@ export function ReviewPage({
   return (
     <ReviewShell client={client} badge={badge}>
       <div className="mb-6" style={{ animation: "slideUp .4s ease" }}>
+        <div className="mb-3 text-[11px] font-medium uppercase tracking-[.1em] text-faint">
+          Review
+        </div>
         <h1 className="mb-1.5 text-[26px] tracking-[-.02em]">
           Your content is ready.
         </h1>
-        <p className="text-sm leading-[1.6] text-muted">
-          Review each post below. Approve what&rsquo;s good, flag anything that
-          needs a tweak. Your team will be notified instantly.
-        </p>
+        <p className="text-sm leading-[1.6] text-muted">{summarySentence}</p>
       </div>
 
-      <ReviewProgress approved={approved} total={posts.length} accent={accent} />
+      <ReviewSummary
+        total={posts.length}
+        approved={approved}
+        awaiting={awaiting}
+        changes={changes}
+        accent={accent}
+        remainingIds={remainingIds}
+        onApproveRemaining={handleApproveRemaining}
+      />
 
-      <div className="grid gap-5">
-        {posts.map((post, i) => (
-          <div
-            key={post.id}
-            style={{ animation: `slideUp .4s ease ${i * 0.07}s both` }}
-          >
-            <PostCard
-              post={post}
-              token={token}
-              clientName={client.name}
-              accent={accent}
-              onStatusChange={(id, status) =>
-                setStatuses((prev) => ({ ...prev, [id]: status }))
-              }
-            />
-          </div>
-        ))}
-      </div>
+      <FilterTabs counts={counts} value={filter} onChange={setFilter} />
+
+      {visiblePosts.length === 0 ? (
+        <div className="card px-5 py-9 text-center text-sm text-faint">
+          Nothing in this filter.
+        </div>
+      ) : (
+        <div className="grid gap-5">
+          {visiblePosts.map((post, i) => (
+            <div
+              key={post.id}
+              style={{ animation: `slideUp .4s ease ${i * 0.07}s both` }}
+            >
+              <PostCard
+                post={post}
+                token={token}
+                clientName={client.name}
+                accent={accent}
+                onStatusChange={(id, status) =>
+                  setStatuses((prev) => ({ ...prev, [id]: status }))
+                }
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {allDone && !submitted ? (
         <div

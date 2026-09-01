@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { getInitials } from "@/lib/format";
 import type { Client } from "@/types/database";
 
@@ -68,36 +69,142 @@ export function ReviewShell({
   );
 }
 
-/** Shared progress bar. Guards against the empty case rather than dividing by zero. */
-export function ReviewProgress({
-  approved,
+/**
+ * Progress bar + status breakdown + the "Approve remaining" bulk action.
+ *
+ * `remainingIds` is every reviewable item not yet approved. There is no
+ * bulk-approve route — the button just calls the existing single-item
+ * approve action once per id (see `approveMany` in ./api) — so this stays
+ * disabled/hidden whenever there is nothing left to approve.
+ */
+export function ReviewSummary({
   total,
+  approved,
+  awaiting,
+  changes,
   accent,
-  label = "approved",
+  remainingIds,
+  onApproveRemaining,
 }: {
-  approved: number;
   total: number;
+  approved: number;
+  awaiting: number;
+  changes: number;
   accent: string;
-  label?: string;
+  remainingIds?: string[];
+  onApproveRemaining?: (ids: string[]) => Promise<void> | void;
 }) {
+  const [busy, setBusy] = useState(false);
   if (total === 0) return null;
 
   const pct = Math.round((approved / total) * 100);
+  const canBulkApprove = Boolean(onApproveRemaining && remainingIds?.length);
+
+  async function handleApproveRemaining() {
+    if (!onApproveRemaining || !remainingIds?.length || busy) return;
+    setBusy(true);
+    await onApproveRemaining(remainingIds);
+    setBusy(false);
+  }
 
   return (
-    <div className="mb-7">
-      <div className="mb-1.5 flex justify-between text-[13px]">
+    <div className="mb-6 rounded-card border-hairline border-line bg-white p-4 sm:p-5">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[13px]">
         <span className="text-muted">
-          {approved} of {total} {label}
+          {approved} of {total} approved
         </span>
         <span className="font-medium text-[#3d3d3a]">{pct}%</span>
       </div>
-      <div className="h-1 overflow-hidden rounded-full bg-[#eeedea]">
+      <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-[#eeedea]">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: accent }}
         />
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {awaiting > 0 ? (
+          <span
+            className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+            style={{ background: "rgba(200,82,42,0.1)", color: accent }}
+          >
+            {awaiting} awaiting you
+          </span>
+        ) : null}
+        {changes > 0 ? (
+          <span className="rounded-full bg-changes-bg px-2.5 py-1 text-[12px] font-medium text-changes-fg">
+            {changes} changes requested
+          </span>
+        ) : null}
+        {awaiting === 0 && changes === 0 ? (
+          <span className="rounded-full bg-approved-bg px-2.5 py-1 text-[12px] font-medium text-approved-fg">
+            All caught up
+          </span>
+        ) : null}
+
+        {canBulkApprove ? (
+          <button
+            type="button"
+            onClick={handleApproveRemaining}
+            disabled={busy}
+            className="ml-auto whitespace-nowrap rounded-[10px] px-3.5 py-2 text-[13px] font-medium text-white transition-opacity disabled:opacity-60"
+            style={{ background: accent }}
+          >
+            {busy ? "Approving…" : `Approve remaining (${remainingIds!.length})`}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/* ── Status filter tabs ──────────────────────────────────── */
+
+export type ReviewFilter = "all" | "awaiting" | "changes" | "approved";
+
+const FILTER_LABEL: Record<ReviewFilter, string> = {
+  all: "All",
+  awaiting: "Awaiting you",
+  changes: "Changes requested",
+  approved: "Approved",
+};
+
+/** Real counts drive every tab — no bucket is ever guessed at. */
+export function FilterTabs({
+  counts,
+  value,
+  onChange,
+}: {
+  counts: Record<ReviewFilter, number>;
+  value: ReviewFilter;
+  onChange: (filter: ReviewFilter) => void;
+}) {
+  return (
+    <div
+      className="mb-5 flex flex-wrap gap-2"
+      role="tablist"
+      aria-label="Filter by status"
+    >
+      {(Object.keys(FILTER_LABEL) as ReviewFilter[]).map((key) => {
+        const active = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(key)}
+            className="whitespace-nowrap rounded-full px-3 py-[7px] text-[13px] font-medium transition-colors"
+            style={{
+              background: active ? "#2c2c2a" : "#fff",
+              color: active ? "#fff" : "#5F5E5A",
+              border: `0.5px solid ${active ? "#2c2c2a" : "#d3d1c7"}`,
+            }}
+          >
+            {FILTER_LABEL[key]} {counts[key]}
+          </button>
+        );
+      })}
     </div>
   );
 }
